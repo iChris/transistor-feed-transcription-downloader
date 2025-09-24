@@ -1,24 +1,34 @@
-# Podcast Transcript Downloader
+# Generic Podcast Transcript Downloader
 
-Enhanced transcript downloader for the "How About Tomorrow?" podcast that extracts episode metadata, timestamps, and topics from the RSS feed.
+A versatile transcript downloader for podcasts that extracts episode metadata, timestamps, and topics from RSS feeds. Works with any podcast that provides text transcripts!
 
-## Features
+## ✨ Features
 
-- 📝 Downloads full episode transcripts
-- 📊 Extracts episode metadata (titles, numbers, publication dates)
-- ⏰ Includes timestamped topic lists
-- 🎯 Smart filename generation
-- 🎨 Colorized terminal output
-- 📁 Configurable output directory
-- 🔢 Limit download count for testing
+- 📻 **Multi-podcast support** - Works with any podcast RSS feed
+- 🎯 **Interactive mode** - Prompts you to select from popular shows or enter custom URLs
+- 📝 **Enhanced transcripts** with episode metadata, timestamps, and topics
+- 🎨 **Beautiful terminal output** with colors and progress tracking
+- 📁 **Smart file naming** using show names and episode titles
+- 🔢 **Episode limiting** for testing or partial downloads
+- 🛡️ **Error handling** and validation
+- 🎪 **Predefined shows** for popular tech podcasts
 
-## Installation
+## 🎙️ Supported Shows (Predefined)
+
+- **How About Tomorrow?** - Adam Elmore & Dax Raad (`tomorrow`)
+- **Syntax** - Wes Bos & Scott Tolinski (`syntax`)
+- **The Changelog** - Software development podcast (`changelog`)
+- **JS Party** - JavaScript community podcast (`jsparty`)
+- **Shopify Engineering** - Engineering at Shopify (`shopify`)
+- **Custom RSS URLs** - Any podcast with text transcripts
+
+## 🚀 Installation
 
 ### Quick Install (Recommended)
 
 ```bash
 # Download and install
-curl -L https://raw.githubusercontent.com/YOUR_USERNAME/podcast-transcript-downloader/main/podcast-transcript-downloader -o podcast-transcript-downloader
+curl -L https://raw.githubusercontent.com/YOUR_USERNAME/podcast-transcript-downloader/main/podcast-transcript-downloader-generic -o podcast-transcript-downloader
 chmod +x podcast-transcript-downloader
 
 # Move to your PATH (optional)
@@ -33,28 +43,37 @@ git clone https://github.com/YOUR_USERNAME/podcast-transcript-downloader.git
 cd podcast-transcript-downloader
 
 # Make executable
-chmod +x podcast-transcript-downloader
+chmod +x podcast-transcript-downloader-generic
 
 # Optional: Add to PATH
-ln -s $(pwd)/podcast-transcript-downloader /usr/local/bin/podcast-transcript-downloader
+ln -s $(pwd)/podcast-transcript-downloader-generic /usr/local/bin/podcast-transcript-downloader
 ```
 
-## Usage
+## 📖 Usage
 
-### Basic Usage
+### Interactive Mode (Default)
+
+Simply run the command and you'll be prompted to select a show:
 
 ```bash
-# Download all episodes to current directory
-./podcast-transcript-downloader
+podcast-transcript-downloader
+```
 
-# Download to specific directory
-./podcast-transcript-downloader -d ~/Downloads/Podcasts
+This will show you:
+```
+📻 Generic Podcast Transcript Downloader
 
-# Download only the 5 most recent episodes
-./podcast-transcript-downloader -c 5
+Select a podcast show to download transcripts from:
 
-# Combine options
-./podcast-transcript-downloader -d ~/Downloads -c 10
+  1) How About Tomorrow? (tomorrow)
+  2) Syntax (syntax)
+  3) The Changelog (changelog)
+  4) JS Party (jsparty)
+  5) Shopify Engineering (shopify)
+  
+  6) Enter custom RSS URL
+
+Enter your choice (1-6):
 ```
 
 ### Command Line Options
@@ -65,36 +84,51 @@ ln -s $(pwd)/podcast-transcript-downloader /usr/local/bin/podcast-transcript-dow
 | `-v, --version` | Show version information |
 | `-d, --dir DIR` | Output directory (default: current directory) |
 | `-c, --count N` | Limit to N most recent episodes |
+| `-u, --url URL` | Custom RSS feed URL |
+| `-s, --show SHOW` | Predefined show shortname |
+| `-l, --list` | List available predefined shows |
+| `-i, --interactive` | Force interactive mode |
 
 ### Examples
 
 ```bash
-# Download all episodes
+# Interactive mode (default)
 podcast-transcript-downloader
 
-# Download to Downloads folder
-podcast-transcript-downloader --dir ~/Downloads
+# Download specific show
+podcast-transcript-downloader -s tomorrow
 
-# Get just the latest 3 episodes for testing
-podcast-transcript-downloader --count 3
+# Custom RSS URL
+podcast-transcript-downloader -u "https://feeds.example.com/podcast"
 
-# Download to custom directory with episode limit
-podcast-transcript-downloader -d /path/to/podcasts -c 20
+# Download to specific directory
+podcast-transcript-downloader -s syntax -d ~/Downloads/Podcasts
+
+# Limit to 5 most recent episodes
+podcast-transcript-downloader -s tomorrow -c 5
+
+# List available shows
+podcast-transcript-downloader -l
+
+# Custom URL with specific directory and episode limit
+podcast-transcript-downloader -u "https://feeds.example.com/podcast" -d ~/Transcripts -c 10
 ```
 
-## Output Format
+## 📄 Output Format
 
-Each transcript file includes:
+Each transcript file includes comprehensive metadata:
 
 ```
 ================================================================================
 EPISODE INFORMATION
 ================================================================================
+Show: How About Tomorrow?
 Episode ID: 5bb7c347
 Episode Number: 143
 Title: Missouri Humidity and AI Hype Cycles
 Published: Tue, 26 Aug 2025 04:00:00 -0700
-Downloaded: Mon Sep 24 20:46:37 PDT 2025
+Downloaded: Mon Sep 24 20:53:43 PDT 2025
+Source URL: https://share.transistor.fm/s/5bb7c347/transcription.txt
 
 ================================================================================
 TOPICS & TIMESTAMPS
@@ -113,69 +147,118 @@ TRANSCRIPT
 
 ### Filename Format
 
-Files are automatically named using the pattern:
-- `ep_143_Missouri_Humidity_and_AI_Hype_Cycles.txt`
-- `ep_142_Why_Does_Everyone_Hate_Software_Developers.txt`
+Files are automatically named with show prefixes:
+- `tomorrow_ep_143_Missouri_Humidity_and_AI_Hype_Cycles.txt`
+- `syntax_ep_542_The_Future_of_Web_Development.txt`
+- `custom_podcast_ep_15_Amazing_Episode_Title.txt`
 
-## Requirements
+## 🛠️ Requirements
 
-- **curl** - For downloading RSS feed and transcripts
+- **curl** - For downloading RSS feeds and transcripts
 - **awk**, **sed**, **grep** - Standard Unix text processing tools (included on macOS/Linux)
 
 All dependencies are typically pre-installed on macOS and Linux systems.
 
-## Supported Platforms
+## 🌐 Adding Your Own Podcast
 
-- ✅ macOS
-- ✅ Linux
-- ✅ Windows (WSL/Git Bash)
+### Method 1: Use Custom URL
 
-## Contributing
+```bash
+podcast-transcript-downloader -u "https://your-podcast-rss-feed.com/feed.xml"
+```
+
+### Method 2: Add to Predefined Shows
+
+Edit the script and add your show to the `SHOWS` array:
+
+```bash
+declare -A SHOWS=(
+    # ... existing shows ...
+    ["yourshow"]="https://your-feed-url.com/rss|Your Show Name"
+)
+```
+
+## 🎯 Supported Platforms
+
+- ✅ **macOS** - Full support
+- ✅ **Linux** - Full support  
+- ✅ **Windows** - WSL/Git Bash/Cygwin
+
+## 🤝 Contributing
+
+We'd love your help! Here are some ways to contribute:
+
+### Adding More Predefined Shows
+
+1. Find a podcast with text transcripts in their RSS feed
+2. Add it to the `SHOWS` array in the script
+3. Submit a pull request
+
+### Popular Shows to Add
+
+Help us add support for:
+- **Shop Talk Show** - Web development
+- **Full Stack Radio** - Adam Wathan's podcast
+- **The Stack Overflow Podcast**
+- **CodePen Radio** - Development stories
+- **Ladybug Podcast** - Tech careers
+
+### Development
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+3. Test with multiple podcast feeds
+4. Commit your changes (`git commit -m 'Add amazing feature'`)
+5. Push to the branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
 
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Troubleshooting
+## 🔧 Troubleshooting
 
 ### Common Issues
+
+**"No transcript URLs found"**
+- The podcast may not provide text transcripts
+- Some shows only have audio/video transcripts
+- Try using the `-u` option with a direct RSS URL
+
+**"RSS feed appears invalid"**
+- Check your internet connection
+- Verify the RSS URL is correct and accessible
+- Some feeds may be geo-restricted
 
 **"Command not found"**
 - Make sure the script is executable: `chmod +x podcast-transcript-downloader`
 - Check that it's in your PATH or use `./podcast-transcript-downloader`
 
-**"Failed to download RSS feed"**
-- Check your internet connection
-- Verify the RSS URL is accessible: `curl https://feeds.transistor.fm/tomorrow`
+### Debug Mode
 
-**"Missing required dependencies"**
-- Install missing tools using your package manager
-- On macOS: Dependencies are typically pre-installed
-- On Linux: `sudo apt install curl` (curl is usually the only one that might be missing)
+Run with verbose output to see what's happening:
 
-### Getting Help
+```bash
+# Add debug info by running the script with bash -x
+bash -x podcast-transcript-downloader -s tomorrow -c 1
+```
 
-- 🐛 **Bug Reports**: [Open an issue](https://github.com/YOUR_USERNAME/podcast-transcript-downloader/issues)
-- 💡 **Feature Requests**: [Open an issue](https://github.com/YOUR_USERNAME/podcast-transcript-downloader/issues)
-- ❓ **Questions**: Check existing issues or open a new one
+## 🎉 What's New in v2.0.0
 
-## Changelog
+- 🆕 **Generic podcast support** - Works with any RSS feed
+- 🎯 **Interactive show selection** - User-friendly prompts
+- 📻 **Predefined popular shows** - Quick access to common podcasts
+- 🛡️ **Better error handling** - More informative error messages
+- 🎨 **Enhanced terminal output** - Colors and better formatting
+- 🔍 **RSS feed validation** - Checks feed validity before processing
+- 📝 **Flexible topic extraction** - Works with different RSS formats
 
-### v1.0.0
-- Initial release
-- Episode metadata extraction
-- Timestamped topics
-- Configurable output directory
-- Episode count limiting
-- Colorized output
+## 📜 License
 
-## Credits
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-- Podcast: ["How About Tomorrow?"](https://tomorrow.fm) by Adam Elmore & Dax Raad
-- RSS Feed: Powered by [Transistor](https://transistor.fm)
+## 🙏 Credits
+
+- Original idea inspired by "How About Tomorrow?" podcast transcripts
+- Built for podcast lovers who want searchable, offline transcripts
+- Thanks to all the podcasters who provide transcript accessibility
+
+---
+
+**Happy podcast downloading!** 🎧✨
