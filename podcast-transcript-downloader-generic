@@ -1,0 +1,527 @@
+#!/usr/bin/env bash
+
+# Generic Podcast Transcript Downloader
+# Downloads transcripts from podcast RSS feeds with enhanced metadata
+# Supports multiple podcast shows with user selection
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Configuration
+SCRIPT_VERSION="2.0.0"
+
+# Predefined shows (can be extended)
+get_show_info() {
+    case "$1" in
+        "tomorrow")
+            echo "https://feeds.transistor.fm/tomorrow|How About Tomorrow?"
+            ;;
+        "syntax")
+            echo "https://feeds.simplecast.com/54nAGcIl|Syntax"
+            ;;
+        "changelog")
+            echo "https://changelog.com/podcast/feed|The Changelog"
+            ;;
+        "jsparty")
+            echo "https://changelog.com/jsparty/feed|JS Party"
+            ;;
+        "shopify")
+            echo "https://feeds.simplecast.com/dQjinlJr|Shopify Engineering"
+            ;;
+        *)
+            echo ""
+            ;;
+    esac
+}
+
+# List of available show keys
+SHOW_KEYS=("tomorrow" "syntax" "changelog" "jsparty" "shopify")
+
+# Help function
+show_help() {
+    cat << EOF
+Generic Podcast Transcript Downloader v${SCRIPT_VERSION}
+
+DESCRIPTION:
+    Downloads transcripts from podcast RSS feeds with enhanced metadata
+    including episode titles, numbers, timestamps, and topic lists.
+
+USAGE:
+    $(basename "$0") [OPTIONS]
+
+OPTIONS:
+    -h, --help          Show this help message
+    -v, --version       Show version information
+    -d, --dir DIR       Output directory (default: current directory)
+    -c, --count N       Limit to N most recent episodes (default: all)
+    -u, --url URL       Custom RSS feed URL
+    -s, --show SHOW     Show shortname from predefined list
+    -l, --list          List available predefined shows
+    -i, --interactive   Interactive mode (default)
+
+PREDEFINED SHOWS:
+    tomorrow    - How About Tomorrow? (Adam Elmore & Dax Raad)
+    syntax      - Syntax (Wes Bos & Scott Tolinski)
+    changelog   - The Changelog
+    jsparty     - JS Party
+    shopify     - Shopify Engineering
+
+EXAMPLES:
+    $(basename "$0")                        # Interactive mode - prompts for show
+    $(basename "$0") -s tomorrow            # Download "How About Tomorrow?"
+    $(basename "$0") -u "https://..."       # Custom RSS URL
+    $(basename "$0") -s tomorrow -c 5       # Latest 5 episodes of Tomorrow
+    $(basename "$0") -d ~/Downloads -i      # Interactive with custom directory
+
+OUTPUT:
+    Files are named: SHOW_ep_NUMBER_TITLE.txt
+    Each file contains:
+    - Episode metadata (title, number, date)
+    - Timestamped topics list (when available)
+    - Full transcript
+
+REQUIREMENTS:
+    - curl (for downloading RSS feed and transcripts)
+    - awk, sed, grep (standard Unix tools)
+
+EOF
+}
+
+# Version function
+show_version() {
+    echo "Generic Podcast Transcript Downloader v${SCRIPT_VERSION}"
+    echo "Enhanced transcript downloader for podcast RSS feeds"
+}
+
+# List available shows
+list_shows() {
+    echo -e "${CYAN}Available predefined shows:${NC}"
+    echo ""
+    for key in "${SHOW_KEYS[@]}"; do
+        local show_info
+        show_info=$(get_show_info "$key")
+        IFS='|' read -r url name <<< "$show_info"
+        printf "  ${GREEN}%-12s${NC} - %s\n" "$key" "$name"
+    done
+    echo ""
+    echo "Use -s SHORTNAME or -u URL for custom feeds"
+}
+
+# Logging functions
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1" >&2
+}
+
+# Check dependencies
+check_dependencies() {
+    local deps=("curl" "awk" "sed" "grep")
+    local missing=()
+    
+    for dep in "${deps[@]}"; do
+        if ! command -v "$dep" &> /dev/null; then
+            missing+=("$dep")
+        fi
+    done
+    
+    if [ ${#missing[@]} -ne 0 ]; then
+        log_error "Missing required dependencies: ${missing[*]}"
+        log_error "Please install the missing tools and try again."
+        exit 1
+    fi
+}
+
+# Interactive show selection
+interactive_show_selection() {
+    echo -e "${CYAN}📻 Generic Podcast Transcript Downloader${NC}"
+    echo ""
+    echo "Select a podcast show to download transcripts from:"
+    echo ""
+    
+    # Show predefined options
+    local i=1
+    for key in "${SHOW_KEYS[@]}"; do
+        local show_info
+        show_info=$(get_show_info "$key")
+        IFS='|' read -r url name <<< "$show_info"
+        printf "  ${GREEN}%d)${NC} %s (%s)\n" "$i" "$name" "$key"
+        ((i++))
+    done
+    
+    echo ""
+    printf "  ${GREEN}%d)${NC} Enter custom RSS URL\n" "$i"
+    echo ""
+    
+    while true; do
+        read -p "Enter your choice (1-$i): " choice
+        
+        if [[ "$choice" =~ ^[0-9]+$ ]]; then
+            if [ "$choice" -ge 1 ] && [ "$choice" -lt "$i" ]; then
+                # Predefined show selected
+                selected_key="${SHOW_KEYS[$((choice-1))]}"
+                local show_info
+                show_info=$(get_show_info "$selected_key")
+                IFS='|' read -r RSS_URL SHOW_NAME <<< "$show_info"
+                SHOW_SHORTNAME="$selected_key"
+                break
+            elif [ "$choice" -eq "$i" ]; then
+                # Custom URL selected
+                echo ""
+                read -p "Enter the RSS feed URL: " RSS_URL
+                if [[ -z "$RSS_URL" ]]; then
+                    log_error "RSS URL cannot be empty"
+                    continue
+                fi
+                
+                read -p "Enter show name (for file naming): " SHOW_NAME
+                if [[ -z "$SHOW_NAME" ]]; then
+                    SHOW_NAME="podcast"
+                fi
+                
+                SHOW_SHORTNAME=$(echo "$SHOW_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/_*$//g')
+                break
+            fi
+        fi
+        
+        echo "Invalid choice. Please enter a number between 1 and $i."
+    done
+    
+    echo ""
+    log_info "Selected: $SHOW_NAME"
+    log_info "RSS URL: $RSS_URL"
+    echo ""
+}
+
+# Test RSS feed validity
+test_rss_feed() {
+    local url="$1"
+    log_info "Testing RSS feed..."
+    
+    if ! curl -s --head "$url" | head -1 | grep -q "200 OK"; then
+        log_error "RSS feed URL appears to be invalid or unreachable"
+        log_error "URL: $url"
+        return 1
+    fi
+    
+    # Test if it contains transcript URLs (this is optional)
+    local rss_content
+    if ! rss_content=$(curl -s "$url" 2>/dev/null); then
+        log_error "Failed to download RSS feed content"
+        return 1
+    fi
+    
+    if ! echo "$rss_content" | grep -q "<item>"; then
+        log_warning "RSS feed doesn't appear to contain standard podcast episodes"
+        log_warning "Continuing anyway..."
+    fi
+    
+    log_success "RSS feed appears valid"
+    return 0
+}
+
+# Extract topics with better fallback
+extract_topics() {
+    local episode_section="$1"
+    local topics=""
+    
+    # Try multiple topic extraction methods
+    # Method 1: Look for "Topics:" section (How About Tomorrow style)
+    topics=$(echo "$episode_section" | grep -A 200 '<description>' | \
+             sed -n '/Topics:<\/strong>/,/<\/ul>/p' | \
+             grep -o '<li>([^)]*) - [^<]*</li>' | \
+             sed 's/<li>(\([^)]*\)) - \([^<]*\)<\/li>/\1 - \2/')
+    
+    # Method 2: Look for "Timestamps:" section
+    if [[ -z "$topics" ]]; then
+        topics=$(echo "$episode_section" | grep -A 200 '<description>' | \
+                 sed -n '/Timestamps:<\/strong>/,/<\/ul>/p' | \
+                 grep -o '<li>([^)]*) - [^<]*</li>' | \
+                 sed 's/<li>(\([^)]*\)) - \([^<]*\)<\/li>/\1 - \2/')
+    fi
+    
+    # Method 3: Look for any timestamped list items
+    if [[ -z "$topics" ]]; then
+        topics=$(echo "$episode_section" | grep -A 200 '<description>' | \
+                 grep -o '<li>([^)]*)[^<]*</li>' | \
+                 sed 's/<li>(\([^)]*\))\([^<]*\)<\/li>/\1 -\2/' | \
+                 head -20)  # Limit to first 20 to avoid noise
+    fi
+    
+    echo "$topics"
+}
+
+# Parse command line arguments
+OUTPUT_DIR="."
+EPISODE_LIMIT=""
+RSS_URL=""
+SHOW_NAME=""
+SHOW_SHORTNAME=""
+INTERACTIVE_MODE=true
+CUSTOM_URL=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -v|--version)
+            show_version
+            exit 0
+            ;;
+        -l|--list)
+            list_shows
+            exit 0
+            ;;
+        -d|--dir)
+            OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        -c|--count)
+            EPISODE_LIMIT="$2"
+            shift 2
+            ;;
+        -u|--url)
+            RSS_URL="$2"
+            CUSTOM_URL=true
+            INTERACTIVE_MODE=false
+            shift 2
+            ;;
+        -s|--show)
+            local show_info
+            show_info=$(get_show_info "$2")
+            if [[ -n "$show_info" ]]; then
+                IFS='|' read -r RSS_URL SHOW_NAME <<< "$show_info"
+                SHOW_SHORTNAME="$2"
+                INTERACTIVE_MODE=false
+            else
+                log_error "Unknown show: $2"
+                log_info "Use -l or --list to see available shows"
+                exit 1
+            fi
+            shift 2
+            ;;
+        -i|--interactive)
+            INTERACTIVE_MODE=true
+            shift
+            ;;
+        *)
+            log_error "Unknown option: $1"
+            echo "Use -h or --help for usage information."
+            exit 1
+            ;;
+    esac
+done
+
+# Create output directory if it doesn't exist
+if [ ! -d "$OUTPUT_DIR" ]; then
+    log_info "Creating output directory: $OUTPUT_DIR"
+    mkdir -p "$OUTPUT_DIR"
+fi
+
+# Main download function
+main() {
+    check_dependencies
+    
+    # Handle show selection
+    if [[ "$INTERACTIVE_MODE" == true && -z "$RSS_URL" ]]; then
+        interactive_show_selection
+    elif [[ "$CUSTOM_URL" == true && -z "$SHOW_NAME" ]]; then
+        read -p "Enter show name for file naming: " SHOW_NAME
+        if [[ -z "$SHOW_NAME" ]]; then
+            SHOW_NAME="podcast"
+        fi
+        SHOW_SHORTNAME=$(echo "$SHOW_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/_*$//g')
+    fi
+    
+    if [[ -z "$RSS_URL" ]]; then
+        log_error "No RSS URL specified. Use -s, -u, or run interactively."
+        exit 1
+    fi
+    
+    log_info "Generic Podcast Transcript Downloader v${SCRIPT_VERSION}"
+    log_info "Show: $SHOW_NAME"
+    log_info "RSS URL: $RSS_URL"
+    log_info "Output directory: $OUTPUT_DIR"
+    
+    # Test RSS feed
+    if ! test_rss_feed "$RSS_URL"; then
+        exit 1
+    fi
+    
+    # Create a temporary file for the RSS feed
+    local rss_file
+    rss_file=$(mktemp)
+    trap "rm -f '$rss_file'" EXIT
+    
+    log_info "Downloading RSS feed..."
+    if ! curl -s "$RSS_URL" > "$rss_file"; then
+        log_error "Failed to download RSS feed"
+        exit 1
+    fi
+    
+    log_success "RSS feed downloaded successfully"
+    
+    # Check for transcript URLs
+    local transcript_pattern="transcription\.txt\|transcript\.txt\|\.txt"
+    if ! grep -q "$transcript_pattern" "$rss_file"; then
+        log_warning "No transcript URLs found in RSS feed"
+        log_warning "This show may not provide transcripts"
+        log_info "Continuing to look for episodes anyway..."
+    fi
+    
+    # Extract transcript URLs with more flexible matching
+    local urls
+    if [ -n "$EPISODE_LIMIT" ]; then
+        urls=$(grep -o 'https://[^"]*transcript[^"]*\.txt' "$rss_file" 2>/dev/null | head -n "$EPISODE_LIMIT" || 
+               grep -o 'https://[^"]*\.txt' "$rss_file" | grep -E '(transcript|transcription)' | head -n "$EPISODE_LIMIT" ||
+               echo "")
+        
+        if [[ -z "$urls" ]]; then
+            log_warning "No transcript URLs found with standard patterns"
+            log_info "Attempting to find any .txt URLs..."
+            urls=$(grep -o 'https://[^"]*\.txt' "$rss_file" | head -n "$EPISODE_LIMIT" || echo "")
+        fi
+        
+        log_info "Processing up to $EPISODE_LIMIT episodes"
+    else
+        urls=$(grep -o 'https://[^"]*transcript[^"]*\.txt' "$rss_file" 2>/dev/null || 
+               grep -o 'https://[^"]*\.txt' "$rss_file" | grep -E '(transcript|transcription)' ||
+               echo "")
+        
+        if [[ -z "$urls" ]]; then
+            log_warning "No transcript URLs found with standard patterns"
+            log_info "Attempting to find any .txt URLs..."
+            urls=$(grep -o 'https://[^"]*\.txt' "$rss_file" || echo "")
+        fi
+        
+        log_info "Processing all available episodes"
+    fi
+    
+    if [[ -z "$urls" ]]; then
+        log_error "No transcript URLs found in RSS feed"
+        log_error "This podcast may not provide text transcripts"
+        exit 1
+    fi
+    
+    local count=0
+    local total
+    total=$(echo "$urls" | wc -l | tr -d ' ')
+    
+    echo "$urls" | while IFS= read -r url; do
+        [ -z "$url" ] && continue
+        
+        count=$((count + 1))
+        local id
+        id=$(basename "$(dirname "$url")" | sed 's/[^a-zA-Z0-9]/_/g')
+        
+        log_info "[$count/$total] Processing episode: $url"
+        
+        # Find episode metadata by searching backwards from the transcript URL
+        local episode_section
+        episode_section=$(grep -B 100 "$url" "$rss_file" 2>/dev/null || echo "")
+        
+        # If that fails, try to find the episode by ID in the URL
+        if [[ -z "$episode_section" ]]; then
+            episode_section=$(grep -B 50 -A 50 "$id" "$rss_file" 2>/dev/null || echo "")
+        fi
+        
+        # Extract metadata with better fallbacks
+        local title episode_num pub_date topics
+        title=$(echo "$episode_section" | grep '<title>' | tail -1 | sed 's/.*<title[^>]*>//; s/<\/title>.*//' || echo "Unknown Episode")
+        episode_num=$(echo "$episode_section" | grep -o '<itunes:episode>[^<]*</itunes:episode>' | sed 's/<[^>]*>//g' | tail -1 || echo "")
+        pub_date=$(echo "$episode_section" | grep -o '<pubDate>[^<]*</pubDate>' | sed 's/<[^>]*>//g' | tail -1 || echo "Unknown")
+        
+        # Extract topics with multiple fallback methods
+        topics=$(extract_topics "$episode_section")
+        
+        # Download the transcript
+        log_info "  Downloading transcript..."
+        local transcript_content
+        if ! transcript_content=$(curl -s "$url" 2>/dev/null); then
+            log_warning "  Failed to download transcript from: $url"
+            continue
+        fi
+        
+        # Check if we actually got transcript content
+        if [[ -z "$transcript_content" || ${#transcript_content} -lt 50 ]]; then
+            log_warning "  Transcript appears to be empty or too short"
+            continue
+        fi
+        
+        # Create enhanced filename
+        local filename
+        if [[ -n "$episode_num" && -n "$title" ]]; then
+            local clean_title
+            clean_title=$(echo "$title" | sed 's/[^a-zA-Z0-9 ]//g' | sed 's/ /_/g' | cut -c1-40)
+            filename="$OUTPUT_DIR/${SHOW_SHORTNAME}_ep_${episode_num}_${clean_title}.txt"
+        elif [[ -n "$title" ]]; then
+            local clean_title
+            clean_title=$(echo "$title" | sed 's/[^a-zA-Z0-9 ]//g' | sed 's/ /_/g' | cut -c1-40)
+            filename="$OUTPUT_DIR/${SHOW_SHORTNAME}_${clean_title}.txt"
+        else
+            filename="$OUTPUT_DIR/${SHOW_SHORTNAME}_${id}.txt"
+        fi
+        
+        # Create the enhanced transcript file
+        cat > "$filename" << EOF
+================================================================================
+EPISODE INFORMATION
+================================================================================
+Show: $SHOW_NAME
+Episode ID: $id
+Episode Number: ${episode_num:-"Not specified"}
+Title: ${title:-"No title available"}
+Published: ${pub_date:-"Unknown"}
+Downloaded: $(date)
+Source URL: $url
+
+================================================================================
+TOPICS & TIMESTAMPS
+================================================================================
+EOF
+
+        # Add formatted topics if available
+        if [[ -n "$topics" ]]; then
+            echo "$topics" | while IFS= read -r topic; do
+                [[ -n "$topic" ]] && echo "  $topic"
+            done >> "$filename"
+        else
+            echo "  No timestamped topics available for this episode" >> "$filename"
+        fi
+        
+        cat >> "$filename" << EOF
+
+================================================================================
+TRANSCRIPT
+================================================================================
+$transcript_content
+EOF
+        
+        log_success "  Created: $(basename "$filename")"
+    done
+    
+    log_success "Download complete! Files saved to: $OUTPUT_DIR"
+    log_info "Files are prefixed with: ${SHOW_SHORTNAME}_"
+}
+
+# Run main function
+main "$@"
