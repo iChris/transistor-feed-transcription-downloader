@@ -28,7 +28,7 @@ A versatile transcript downloader for podcasts that extracts episode metadata, t
 
 ```bash
 # Download and install
-curl -L https://raw.githubusercontent.com/YOUR_USERNAME/podcast-transcript-downloader/main/podcast-transcript-downloader-generic -o podcast-transcript-downloader
+curl -L https://raw.githubusercontent.com/iChris/podcast-transcript-downloader/main/podcast-transcript-downloader-generic -o podcast-transcript-downloader
 chmod +x podcast-transcript-downloader
 
 # Move to your PATH (optional)
@@ -39,7 +39,7 @@ sudo mv podcast-transcript-downloader /usr/local/bin/
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/podcast-transcript-downloader.git
+git clone https://github.com/iChris/podcast-transcript-downloader.git
 cd podcast-transcript-downloader
 
 # Make executable
